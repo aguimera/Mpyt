@@ -99,7 +99,7 @@ class MpytDataBase(object):
         dt = np.diff(self.time)
         sepInds = np.where(dt > DTimeSplitter)[0]
         if len(sepInds) == 0:
-            sepInds = (0, )
+            sepInds = (len(self.time), )
         CPcycles = []
         oldInd = -1
         for cy, sep in enumerate(sepInds):
@@ -146,8 +146,8 @@ if __name__ == "__main__":
 
 #    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
 #    FileName = './TestFiles/B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_04_PEIS.mpt'
-    FileName = './TestFiles/B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_02_CP Fast.mpt'
-#    FileName = './TestFiles/B12_MEA1_57_13_B2_M2_Pulses_05_CP Fast.mpt'
+#    FileName = './TestFiles/B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_02_CP Fast.mpt'
+    FileName = './TestFiles/B12_MEA1_57_13_B2_M2_Pulses_05_CP Fast.mpt'
        
     MpytData = MpytDataBase(FileName=FileName)
     
@@ -166,6 +166,6 @@ if __name__ == "__main__":
     AxcpI = plt.twinx(AxcpE)
     for CP in MpytData.CPcycles:
         AxcpE.plot(CP['time'], CP['Ewe'])
-        AxcpI.plot(CP['time'], CP['I'],'--')
+        AxcpI.plot(CP['time'], CP['I'],'--', alpha=0.5)
 
 
