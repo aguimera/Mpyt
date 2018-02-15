@@ -234,7 +234,7 @@ if __name__ == "__main__":
 
     plt.close('all')
 #    FileName = 'B5_Cor64_D1_Eup4_M12_01_CV.mpt'
-    FileName = 'B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_04_PEIS.mpt'
+    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
 #    FileName = 'B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_02_CP Fast.mpt'
     
     
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     data = {'freq': myDat.freq,  'PhaseZ': myDat.PhaseZ}
     ds = pd.DataFrame(data)
         
-    dfFreqs = ds.groupby(['freq'][]) 
+    dfFreqs = ds.groupby(['freq']) 
     for f in dfFreqs:
         print ds['freq'], ds['PhaseZ']
     

@@ -195,7 +195,7 @@ def getCyclesData(myDat, analysis):
 if __name__ == "__main__":
 
 #    FileName = 'B5_Cor64_D1_Eup4_M12_01_CV.mpt'
-    FileName = 'B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_04_PEIS.mpt'
+    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
     
     FileIn = open(FileName, 'r')
     
@@ -250,7 +250,8 @@ if __name__ == "__main__":
     
     
     print myDat.sr0
-    
+
+mptData.calcPotentialWindow    
     #getCyclesData(myDat, 'CSC')
     #
     #
