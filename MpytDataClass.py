@@ -52,6 +52,12 @@ def TextFileReader(FileName):
     return Data
 
 
+def CalcScanRate(time, V):
+    SR = np.abs(np.diff(V)/np.diff(time))
+    SR = SR[np.abs(SR - np.mean(SR)) < 0.25 * np.std(SR)]
+    return np.mean(SR)
+
+
 class MpytDataBase(object):
     PropRemoveChars = ('-', '(', ')', '<', '>', ' ', '.', '|')
 
@@ -74,6 +80,38 @@ class MpytDataBase(object):
         self.GetPIEScycles()
         self.GetCVcycles()
 
+        self.CalcCV()
+
+    def CalcCV(self):
+        if len(self.CVcycles) == 0:
+            return
+
+        Cap = []
+        for cv in self.CVcycles:
+            I = cv['I']
+            V = cv['Ewe']
+            time = cv['time']
+
+            SR = CalcScanRate(time, V)       
+            PotWin = (np.min(V), np.max(V))
+            CenterPotWin = PotWin[1] + PotWin[0] #center of PW TODO !!!! Could crash if have same sign
+
+            Ind1 = np.min(np.where(V < CenterPotWin)[0])            
+            Ind2 = np.min(np.where(V[Ind1:] > CenterPotWin)[0])
+
+#            print Ind1, Ind2
+#            print CenterPotWin
+
+            ICap = np.mean(np.abs(I[[Ind1, Ind2]]))            
+            cv['Cap'] = ICap*SR
+            Cap.append(cv['Cap'])
+            
+            cv['SR'] = SR
+            cv['PotWin'] = PotWin
+            cv['CenterPotWin'] = CenterPotWin             
+        self.Cap = Cap
+    
+        
     def GetCVcycles(self):
         if 'ox' not in self.__dict__.keys():
             self.CVcycles = []
@@ -144,28 +182,64 @@ if __name__ == "__main__":
     
     plt.close('all')
 
-#    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
+    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
 #    FileName = './TestFiles/B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_04_PEIS.mpt'
 #    FileName = './TestFiles/B12_MEA1_57_13_B2_M14_Pulses_1M_8mCcm2_02_CP Fast.mpt'
-    FileName = './TestFiles/B12_MEA1_57_13_B2_M2_Pulses_05_CP Fast.mpt'
+#    FileName = './TestFiles/B12_MEA1_57_13_B2_M2_Pulses_05_CP Fast.mpt'
        
     MpytData = MpytDataBase(FileName=FileName)
     
     print MpytData.__dict__.keys()
     
-    fig, (Axm, Axp) = plt.subplots(2, 1, sharex=True)
-    for IES in MpytData.PIEScycles:
-        Axm.loglog(IES['freq'], np.abs(IES['Ze']))
-        Axp.semilogx(IES['freq'], np.angle(IES['Ze'], deg=True))
-
-    fig, Axcv = plt.subplots()
+#    fig, (Axm, Axp) = plt.subplots(2, 1, sharex=True)
+#    for IES in MpytData.PIEScycles:
+#        Axm.loglog(IES['freq'], np.abs(IES['Ze']))
+#        Axp.semilogx(IES['freq'], np.angle(IES['Ze'], deg=True))
+#
+    fig, Axcv = plt.subplots()    
     for CV in MpytData.CVcycles:
         Axcv.plot(CV['Ewe'], CV['I'])
+    plt.figure()
+    print MpytData.Cap
+    
 
-    fig, AxcpE = plt.subplots()
-    AxcpI = plt.twinx(AxcpE)
-    for CP in MpytData.CPcycles:
-        AxcpE.plot(CP['time'], CP['Ewe'])
-        AxcpI.plot(CP['time'], CP['I'],'--', alpha=0.5)
+#    fig, AxcpE = plt.subplots()
+#    AxcpI = plt.twinx(AxcpE)
+#    for CP in MpytData.CPcycles:
+#        AxcpE.plot(CP['time'], CP['Ewe'])
+#        AxcpI.plot(CP['time'], CP['I'],'--', alpha=0.5)
+
+###############################################################################
+### SR call debug
+###############################################################################    
+    ## SR debugging
+    ## direct option
+#    FileName = './TestFiles/B5_Cor64_D1_Eup4_M12_01_CV.mpt'
+#    MpytData = MpytDataBase(FileName=FileName)
+#    fig, Ax1 = plt.subplots()
+#    fig, Ax2 = plt.subplots()
+#    for CV in MpytData.CVcycles:       
+#        SR = np.abs(np.diff(CV['Ewe'])/np.diff(CV['time']))
+#        Ax1.plot(CV['time'][1:],SR,'*')
+#        Ax1.plot(CV['time'][1:],np.mean(SR)*np.ones(len(SR)))
+#        
+#        Ax2.boxplot(SR, positions=(CV['Cycle'],))
+#    plt.xlim(0, CV['Cycle'])
+#
+#    ## SR debugging
+#    ## Outlier removing
+#    fig, Ax1 = plt.subplots()
+#    fig, Ax2 = plt.subplots()
+#    for CV in MpytData.CVcycles:       
+#        SR = np.abs(np.diff(CV['Ewe'])/np.diff(CV['time']))
+#        Ax1.plot(CV['time'][1:],SR,'*')
+#        
+#        SR = SR[np.abs(SR - np.mean(SR)) < 0.25 * np.std(SR)]
+#        Ax1.plot(CV['time'],np.mean(SR)*np.ones(len(CV['time'])))
+#        
+#        Ax2.boxplot(SR, positions=(CV['Cycle'],))
+#    plt.xlim(0, CV['Cycle'])
+
+
 
 
