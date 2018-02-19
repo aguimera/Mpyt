@@ -110,7 +110,8 @@ class MpytDataBase(object):
 
             # Calc Capacitance
             Ind1 = np.min(np.where(Ve < CenterPotWin)[0])
-            Ind2 = np.min(np.where(Ve[Ind1:] > CenterPotWin)[0])
+            Ind2 = np.min(np.where(Ve[Ind1:] > CenterPotWin)[0]) #assumeix [V- --> V+]??
+
 
             ICap = np.mean(np.abs(Ie[[Ind1, Ind2]]))
             cv['Cap'] = ICap/SR
