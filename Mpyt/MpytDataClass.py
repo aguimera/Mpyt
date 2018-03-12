@@ -135,17 +135,13 @@ class MpytDataBase(object):
 
             # Calc Capacitance
             Ind1 = np.min(np.where(Ve < CenterPotWin)[0])
-<<<<<<< HEAD:Mpyt/MpytDataClass.py
             inds = np.where(Ve[Ind1:] > CenterPotWin)[0]
             if len(inds) == 0:
                 print 'Removed incompleted CV', cv['Cycle']
                 self.CVcycles.remove(cv)
                 continue
-            Ind2 = np.min(inds)
-=======
-            Ind2 = np.min(np.where(Ve[Ind1:] > CenterPotWin)[0]) #assumeix [V- --> V+]??
 
->>>>>>> 91d736a3e49ba1b1f19091f82be770f25f4513d3:MpytDataClass.py
+            Ind2 = np.min(np.where(Ve[Ind1:] > CenterPotWin)[0]) #assumeix [V- --> V+]??
 
             ICap = np.mean(np.abs(Ie[[Ind1, Ind2]]))
             cv['Cap'] = ICap/sr
