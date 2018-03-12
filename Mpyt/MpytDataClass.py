@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import itertools as it
 import pandas as pd
 import quantities as pq
+from datetime import datetime
 
 
 def TextFileReader(FileName):
@@ -19,9 +20,15 @@ def TextFileReader(FileName):
     State = 'Header'
     HeaderInfo = ''
     HeadL = None
+    Date = None
     for nl, line in enumerate(FileIn):
         if State == 'Header':
             HeaderInfo = HeaderInfo + line
+            if line.startswith('Acquisition started on'):
+                line = line.replace('\r', '')
+                line = line.replace('\n', '')
+                Date = datetime.strptime(line.split(' : ')[-1],
+                                         '%m/%d/%Y %H:%M:%S')
             if line.startswith('Nb header lines'):
                 HeadL = int(line.split(':')[1])-2
             if HeadL is not None:
@@ -49,7 +56,8 @@ def TextFileReader(FileName):
                 df = float(d)
                 v = np.hstack([v, df]) if np.size(v) else np.array([df])
                 Data[field] = v
-
+    Data['DateTime'] = Date
+    Data['FileName'] = FileName
     return Data
 
 
@@ -61,8 +69,15 @@ def CalcScanRate(time, V, DevRem=0.25):
 
 class MpytDataBase(object):
     PropRemoveChars = ('-', '(', ')', '<', '>', ' ', '.', '|')
-    SRDevRemoval = 0.25    
+    UnitsReplace = (('-1', '**-1'), ('-2', '**-2'), ('\xb5', 'u'))
+    SRDevRemoval = 0.25
     Area = 5e-6*pq.cm**2
+    Name = None
+    CVcycles = []
+    PIEScycles = []
+    CPcycles = []
+    Cap = None
+    SR = None
 
     def __init__(self, FileName, DataDict=None):
         if DataDict is None:
@@ -75,46 +90,62 @@ class MpytDataBase(object):
             for char in self.PropRemoveChars:
                 prop = prop.replace(char, '')
             if (len(k) > 1) and (prop != 'ox'):
-                Units.update({prop: k[1]})
-                vq = pq.Quantity(v, units=k[1])
+                unit = k[1]
+                for uor, urep in self.UnitsReplace:
+                    unit = unit.replace(uor, urep)
+                Units.update({prop: unit})
+                vq = pq.Quantity(v, units=unit)
                 self.__setattr__(prop, vq)
             else:
                 self.__setattr__(prop, v)
         self.__setattr__('Units', Units)
 
-        self.GetCPcycles()
-        self.GetPIEScycles()
-        self.GetCVcycles()
+        if len(self.time) == 0:
+            print FileName, 'Warning empty file'
+            return
 
+        self.CalcCPcycles()
+        self.CalcPIEScycles()
+        self.CalcCVcycles()
+
+#        try:
         self.CalcCV()
+#        except:
+#            print 'Error calclutating CV'
 
     def CalcCV(self):
         if len(self.CVcycles) == 0:
             return
 
         Cap = []
+        SR = []
         for cv in self.CVcycles:
             Ie = cv['I']
             Ve = cv['Ewe']
             time = cv['time']
 
             # calc SR, PotWin, and CenterPotWin
-            SR = CalcScanRate(time, Ve, DevRem=self.SRDevRemoval)
+            sr = CalcScanRate(time, Ve, DevRem=self.SRDevRemoval)
             PotWin = (np.min(Ve), np.max(Ve))
             CenterPotWin = PotWin[1] + PotWin[0]  # center of PW
             # TODO !!!! Could crash if have same sign
-            cv['SR'] = SR
+            cv['SR'] = sr
             cv['PotWin'] = PotWin
             cv['CenterPotWin'] = CenterPotWin
 
-
             # Calc Capacitance
             Ind1 = np.min(np.where(Ve < CenterPotWin)[0])
-            Ind2 = np.min(np.where(Ve[Ind1:] > CenterPotWin)[0])
+            inds = np.where(Ve[Ind1:] > CenterPotWin)[0]
+            if len(inds) == 0:
+                print 'Removed incompleted CV', cv['Cycle']
+                self.CVcycles.remove(cv)
+                continue
+            Ind2 = np.min(inds)
 
             ICap = np.mean(np.abs(Ie[[Ind1, Ind2]]))
-            cv['Cap'] = ICap/SR
+            cv['Cap'] = ICap/sr
             Cap.append(cv['Cap'])
+            SR.append(sr)
 
             # Calc CSC
             Irange1 = np.min(np.abs(Ie[np.where(Ve < 0)[0]]))
@@ -127,17 +158,19 @@ class MpytDataBase(object):
             CSCan0 = np.trapz(Ie[Indan], Ve[Indan])
             cv['CSCcat0'] = CSCcat0
             cv['CSCan0'] = CSCan0
-            cv['CSCcat'] = (CSCcat0 / SR).rescale('C')
-            cv['CSCan'] = (CSCan0 / SR)
+            cv['CSCcat'] = (CSCcat0 / sr).rescale('C')
+            cv['CSCan'] = (CSCan0 / sr).rescale('C')
 
-        if len(Cap) > 0:
+        if len(Cap) > 1:
             self.Cap = (np.mean(Cap[1:])*Cap[-1].units).rescale('mF')
             self.CapErr = self.Cap/np.std(Cap[1:])
+            self.SR = np.mean(SR[1:])*SR[-1].units
         else:
             self.Cap = (np.mean(Cap)*Cap[-1].units).rescale('mF')
+            self.SR = np.mean(SR)*SR[-1].units
             self.CapErr = None
 
-    def GetCVcycles(self):
+    def CalcCVcycles(self):
         if 'ox' not in self.__dict__.keys():
             self.CVcycles = []
             return
@@ -154,7 +187,10 @@ class MpytDataBase(object):
 
         self.CVcycles = CVcycles
 
-    def GetCPcycles(self, DTimeSplitter=1):
+    def CalcCPcycles(self, DTimeSplitter=1):
+        if 'mode' not in self.__dict__.keys():
+            self.CPcycles = []
+            return
         if self.mode[0] != 1:
             self.CPcycles = []
             return
@@ -178,7 +214,7 @@ class MpytDataBase(object):
 
         self.CPcycles = CPcycles
 
-    def GetPIEScycles(self, DTimeSplitter=100):
+    def CalcPIEScycles(self, DTimeSplitter=100):
         if 'ReZ' not in self.__dict__.keys():
             self.PIEScycles = []
             return
@@ -186,7 +222,7 @@ class MpytDataBase(object):
         dt = np.diff(self.time)
         sepInds = np.where(dt > DTimeSplitter)[0]
         if len(sepInds) == 0:
-            sepInds = (0, )
+            sepInds = (len(self.time), )
         PIEScycles = []
         oldInd = -1
         for cy, sep in enumerate(sepInds):
@@ -203,9 +239,36 @@ class MpytDataBase(object):
 
         self.PIEScycles = PIEScycles
 
-
     def GetCap(self, units='mF/cm**2'):
-        return (self.Cap/self.Area).rescale(units)
+        if self.Cap is None:
+            return None
+        return np.round((self.Cap/self.Area).rescale(units),2)
+    
+    def GetSR(self, units='V/s'):
+        if self.SR is None:
+            return None
+        return np.round(self.SR.rescale(units),2)
+
+    def GetCV(self, Mean=True, Vunits='V', Iunits='uA'):
+        if len(self.CVcycles) == 0:
+            return None
+        
+        VE = np.array([])
+        IE = np.array([])
+        if len(self.CVcycles) > 1:
+            Ssize = np.min([CV['Ewe'].shape[0] for CV in self.CVcycles[1:]])
+            for CV in self.CVcycles[1:]:            
+                Ve = CV['Ewe']
+                Ie = CV['I']
+                VE = np.vstack((VE, Ve[:Ssize])) if VE.size else Ve[:Ssize]
+                IE = np.vstack((IE, Ie[:Ssize])) if IE.size else Ie[:Ssize]
+            Ver = VE.mean(axis=0) * Ve.units
+            Ier = IE.mean(axis=0) * Ie.units
+        else:
+            Ver = CV['Ewe']
+            Ier = CV['I']      
+        return Ver.rescale(Vunits), Ier.rescale(Iunits)
+
 
 if __name__ == "__main__":
     
